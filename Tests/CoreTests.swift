@@ -39,18 +39,58 @@ struct CoreTests {
             appointments: data.appointments, notes: oldNotes))
         try legacyBytes.write(to: archive.url)
         let migrated = try archive.load()
-        try check(migrated.version == 2, "Legacy schema migrates to v2")
+        try check(migrated.version == 3, "Legacy schema migrates to v3")
         try check(migrated.notes[0].id == legacyID, "Legacy identity preserved")
         try check(migrated.notes[0].updatedAt == Date(timeIntervalSinceReferenceDate: 12345), "Legacy timestamp preserved")
         try check(migrated.notes[0].body == "  Titolo è 🌿  \n\nCorpo\noriginale", "Title and body preserved verbatim")
         try check(migrated.notes[1].body == "Solo titolo", "Title-only note preserved")
         try check(migrated.notes[2].body == "Solo corpo", "Body-only note preserved")
+        try check(migrated.notes.allSatisfy { !$0.isPinned }, "Legacy notes start unpinned")
+        try check(migrated.appointments.allSatisfy { $0.reminder == nil }, "Legacy appointments have no reminders")
         try check(migrated.movements == data.movements && migrated.appointments == data.appointments, "Other data unchanged")
         try check(try Data(contentsOf: archive.url) == legacyBytes, "Migration reads without rewriting original")
         try archive.save(migrated)
+        try check(try Data(contentsOf: archive.url.appendingPathExtension("pre-v3-backup")) == legacyBytes, "Pre-migration original backed up byte for byte")
         try check(try archive.load() == migrated, "Migration is idempotent after save and restart")
         let encodedNotes = try JSONSerialization.jsonObject(with: JSONEncoder().encode(migrated.notes)) as! [[String: Any]]
         try check(encodedNotes.allSatisfy { $0["title"] == nil }, "New schema contains body only")
+
+        let oldBodyNote = BodyOnlyNote(id: UUID(), body: "Testo v2\nimmutato", updatedAt: january)
+        let oldAppointment = LegacyAppointment(id: UUID(), title: "Impegno v2", date: february, detail: "Dettagli")
+        let v2 = LegacyV2Archive(movements: data.movements, appointments: [oldAppointment], notes: [oldBodyNote])
+        let v2Bytes = try JSONEncoder().encode(v2)
+        let v2Archive = LocalArchive(url: directory.appendingPathComponent("v2.json"))
+        try v2Bytes.write(to: v2Archive.url)
+        var migratedV2 = try v2Archive.load()
+        try check(migratedV2.version == 3 && migratedV2.notes[0].body == oldBodyNote.body, "v2 body preserved")
+        try check(migratedV2.notes[0].id == oldBodyNote.id && migratedV2.notes[0].updatedAt == january, "v2 identity and date preserved")
+        try check(!migratedV2.notes[0].isPinned && migratedV2.appointments[0].reminder == nil, "Missing v2 properties default safely")
+        migratedV2.notes[0].isPinned = true
+        migratedV2.appointments[0].reminder = .fifteenMinutes
+        try v2Archive.save(migratedV2)
+        try check(try v2Archive.load() == migratedV2, "Pin and reminder persist after restart")
+        try check(try Data(contentsOf: v2Archive.url.appendingPathExtension("pre-v3-backup")) == v2Bytes, "v2 backup preserved")
+        migratedV2.notes[0].isPinned = false
+        migratedV2.appointments[0].reminder = nil
+        try v2Archive.save(migratedV2)
+        try check(try v2Archive.load() == migratedV2, "Unpin and disabled reminder persist")
+        try check(try Data(contentsOf: v2Archive.url.appendingPathExtension("pre-v3-backup")) == v2Bytes, "Backup never replaced")
+
+        var reminderItem = Appointment(title: "Test", date: february, detail: "")
+        try check(reminderItem.reminderDate == nil, "Disabled reminder never scheduled")
+        let identifier = reminderItem.notificationIdentifier
+        for lead in ReminderLead.allCases {
+            reminderItem.reminder = lead
+            let expected = february.addingTimeInterval(-Double(lead.rawValue))
+            try check(reminderItem.reminderDate == expected, "All reminder offsets")
+            try check(reminderItem.futureReminderDate(after: expected) == nil, "Exact present time excluded")
+            try check(reminderItem.futureReminderDate(after: expected.addingTimeInterval(1)) == nil, "Past trigger excluded")
+            try check(reminderItem.futureReminderDate(after: expected.addingTimeInterval(-60)) == expected, "Future trigger accepted")
+        }
+        reminderItem.date = january
+        reminderItem.title = "Modificato"
+        try check(reminderItem.notificationIdentifier == identifier, "Stable identifier across edits")
+        try check(Appointment(title: "Altro", date: january, detail: "").notificationIdentifier != identifier, "Distinct identifiers per appointment")
 
         let now = january.addingTimeInterval(12 * 3600)
         let earlier = Appointment(title: "Passato oggi", date: now.addingTimeInterval(-3600), detail: "")
@@ -87,6 +127,12 @@ struct CoreTests {
             throw Failure(message: "Corrupt file must throw")
         } catch is DecodingError { }
         try check(try Data(contentsOf: archive.url) == corrupt, "Corrupt original untouched")
+        do {
+            try archive.save(data)
+            throw Failure(message: "Corrupt archive must not be overwritten")
+        } catch let error as Failure { throw error } catch { }
+        try check(try Data(contentsOf: archive.url) == corrupt, "Save also preserves corrupt original")
+        try FileManager.default.removeItem(at: archive.url)
         var future = LifeData()
         future.version = 99
         try archive.save(future)
@@ -100,7 +146,7 @@ struct CoreTests {
             try LocalArchive(url: blocker.appendingPathComponent("life.json")).save(data)
             throw Failure(message: "Write failure must throw")
         } catch let error as Failure { throw error } catch { }
-        print("PASS: amounts, totals, archive, legacy migration, agenda, corruption, schema and write failures")
+        print("PASS: amounts, archive, v1/v2 migration and backup, pins, reminder dates and identifiers, agenda and failures")
     }
     struct LegacyNote: Encodable {
         let id: UUID
@@ -113,6 +159,23 @@ struct CoreTests {
         let movements: [Movement]
         let appointments: [Appointment]
         let notes: [LegacyNote]
+    }
+    struct BodyOnlyNote: Encodable {
+        let id: UUID
+        let body: String
+        let updatedAt: Date
+    }
+    struct LegacyAppointment: Encodable {
+        let id: UUID
+        let title: String
+        let date: Date
+        let detail: String
+    }
+    struct LegacyV2Archive: Encodable {
+        let version = 2
+        let movements: [Movement]
+        let appointments: [LegacyAppointment]
+        let notes: [BodyOnlyNote]
     }
     struct Failure: Error { let message: String }
     static func check(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {

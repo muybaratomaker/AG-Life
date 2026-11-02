@@ -2,12 +2,13 @@ import SwiftUI
 
 struct SaveErrorBanner: View {
     @EnvironmentObject private var store: LifeStore
+    @EnvironmentObject private var notifications: NotificationService
     var body: some View {
-        if let message = store.errorMessage {
+        if let message = store.errorMessage ?? notifications.notice {
             HStack(alignment: .top) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 Text(message).font(.footnote)
-                Button { store.errorMessage = nil } label: { Image(systemName: "xmark.circle.fill") }
+                Button { store.errorMessage = nil; notifications.notice = nil } label: { Image(systemName: "xmark.circle.fill") }
                     .accessibilityLabel("Chiudi messaggio")
             }
             .padding().frame(maxWidth: .infinity, alignment: .leading).background(.regularMaterial)
@@ -99,7 +100,7 @@ struct ThoughtRow: View {
     let note: Note
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "quote.opening").font(.title3.weight(.bold))
+            Image(systemName: note.isPinned ? "pin.fill" : "quote.opening").font(.title3.weight(.bold))
                 .foregroundStyle(LifeArea.thoughts.accent).accessibilityHidden(true)
             Text(note.body).font(.body).foregroundStyle(.primary).lineLimit(3)
             Text(note.updatedAt, format: .dateTime.day().month(.abbreviated).year().hour().minute())
@@ -109,6 +110,24 @@ struct ThoughtRow: View {
         .background(LinearGradient(colors: [LifeArea.thoughts.accent.opacity(0.13), LifePalette.surface],
             startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 24))
         .accessibilityElement(children: .combine)
+        .accessibilityValue(note.isPinned ? "Fissato in alto" : "")
+        .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(LifeArea.thoughts.accent.opacity(note.isPinned ? 0.4 : 0), lineWidth: 1) }
+    }
+}
+
+struct ThoughtActions: View {
+    @EnvironmentObject private var store: LifeStore
+    let note: Note
+    var body: some View {
+        Button {
+            store.update { data in
+                if let index = data.notes.firstIndex(where: { $0.id == note.id }) {
+                    data.notes[index].isPinned.toggle()
+                }
+            }
+        } label: {
+            Label(note.isPinned ? "Rimuovi dai fissati" : "Fissa in alto", systemImage: note.isPinned ? "pin.slash" : "pin")
+        }
     }
 }
 

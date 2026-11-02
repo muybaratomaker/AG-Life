@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct AGLifeApp: App {
     @StateObject private var store = LifeStore()
+    @StateObject private var notifications = NotificationService()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -20,8 +22,17 @@ struct AGLifeApp: App {
                 }
             }
             .environmentObject(store)
+            .environmentObject(notifications)
             .tint(.teal)
-            .safeAreaInset(edge: .top) { SaveErrorBanner().environmentObject(store) }
+            .safeAreaInset(edge: .top) {
+                SaveErrorBanner().environmentObject(store).environmentObject(notifications)
+            }
+            .onChange(of: store.data.appointments, initial: true) { _, appointments in
+                if store.isReady { notifications.synchronize(appointments) }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active, store.isReady { notifications.synchronize(store.data.appointments) }
+            }
         }
     }
 }

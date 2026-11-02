@@ -6,6 +6,7 @@ struct HomeView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var editor: EditorRoute?
     @State private var selectedNote: Note?
+    @State private var showingSettings = false
 
     private var cardLayout: AnyLayout {
         typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 12))
@@ -26,6 +27,12 @@ struct HomeView: View {
                 }.background(LifeBackdrop())
             }
             .navigationTitle("AG Life").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("Impostazioni")
+                }
+            }
+            .sheet(isPresented: $showingSettings) { SettingsView() }
             .sensoryFeedback(.selection, trigger: editor) { _, newValue in newValue != nil }
             .sheet(item: $editor) { route in
                 switch route {
@@ -135,8 +142,17 @@ struct HomeView: View {
                         symbol: "sparkles", area: .thoughts)
                 }
             }
-            ForEach(Array(store.data.notes.sorted { $0.updatedAt > $1.updatedAt }.prefix(3))) { note in
-                Button { selectedNote = note } label: { ThoughtRow(note: note) }.buttonStyle(GentlePressStyle())
+            if store.data.notes.contains(where: \.isPinned) {
+                Label("Fissati in alto", systemImage: "pin.fill").font(.headline).foregroundStyle(LifeArea.thoughts.accent)
+                ForEach(Array(store.data.notes.filter(\.isPinned).sorted { $0.updatedAt > $1.updatedAt }.prefix(3))) { note in
+                    Button { selectedNote = note } label: { ThoughtRow(note: note) }
+                        .buttonStyle(GentlePressStyle()).contextMenu { ThoughtActions(note: note) }
+                }
+                Text("Tutti i pensieri fissati sono nella scheda Pensieri.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(Array(store.data.notes.filter { !$0.isPinned }.sorted { $0.updatedAt > $1.updatedAt }.prefix(3))) { note in
+                Button { selectedNote = note } label: { ThoughtRow(note: note) }
+                    .buttonStyle(GentlePressStyle()).contextMenu { ThoughtActions(note: note) }
             }
         }
     }

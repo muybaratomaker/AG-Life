@@ -2,6 +2,24 @@
 
 App personale SwiftUI per iPhone, iOS 17+. Nessun account, cloud, SDK esterno o dato personale nel repository.
 
+## Pensieri fissati e promemoria · 0.4.0
+
+Pressione prolungata su un pensiero → **Fissa in alto** / **Rimuovi dai fissati**. La scheda Pensieri separa i fissati dagli altri, sempre ordinati per ultima modifica; la Home mostra fino a tre fissati e tre recenti non fissati. Il fissaggio non cambia testo o data e viene conservato anche dopo la modifica del testo. Nessun titolo reintrodotto.
+
+Nel modulo impegni, **Avvisami** abilita la scelta: all’ora dell’impegno, 5 minuti, 15 minuti, 1 ora o 1 giorno prima (24 ore di anticipo). Il primo utilizzo spiega la finalità e richiede il permesso iOS. Si può salvare un impegno anche negandolo: il calendario segnala che il promemoria non è programmato. Le date degli avvisi trascorse o troppo vicine non producono avvisi immediati.
+
+`NotificationService` usa solo UserNotifications: richieste non ripetute, ID stabili per impegno, sostituzione su modifica, annullamento su disattivazione/eliminazione, verifica delle richieste in attesa dopo l’aggiunta. Un solo worker seriale riconcilia l’ultimo stato salvato, anche al rientro in primo piano, senza chiedere automaticamente permessi all’avvio. Rimuove solo le richieste con il prefisso AG Life. Sono gestiti fino a 60 promemoria futuri più vicini (meno se ci sono altre richieste dell’host); quelli esclusi sono segnalati e vengono rivalutati alla prossima apertura/modifica. Non esiste un servizio che estende questa finestra mentre l’app è chiusa.
+
+L’archivio JSON passa a versione 3: `isPinned` mancante diventa `false`, `reminder` mancante resta disattivato. Nessuna notifica viene generata per i vecchi impegni senza esplicita attivazione. Lettura senza riscrittura e copia byte per byte dell’originale in `life.json.pre-v3-backup` prima del primo salvataggio di un archivio v1/v2. Se la copia fallisce, il salvataggio si ferma. Copie già presenti non vengono sovrascritte. UUID, date e contenuti restano invariati; il Bundle Identifier resta **`com.aglife.personal`**, confermato dall’utente. Aggiornare nello stesso contenitore LiveContainer, senza tornare alle versioni precedenti sull’archivio v3.
+
+### Prova notifiche su iPhone / LiveContainer
+
+Home → ingranaggio → **Impostazioni → Invia notifica di prova**. La richiesta è per circa 10 secondi; invii ripetuti sostituiscono il test precedente. Ripetere il test in tre condizioni: AG Life aperta, LiveContainer in background, iPhone bloccato. Il delegate richiede la presentazione anche in primo piano. “Richiesta accettata da iOS” conferma l’accodamento, non la ricezione. Verificare permessi iOS/host, Full immersion e riepilogo programmato; un permesso autorizzato può comunque avere banner o suoni disabilitati.
+
+LiveContainer documenta **Fix Local Notification** nelle impostazioni specifiche dell’app ospite: abilitarlo se necessario, riaprire AG Life e ripetere il test. L’opzione può avere un nome diverso nelle varie versioni. Non vengono aggiunti entitlement push, modifiche all’host, tweak o workaround. Se il test non arriva, considerare i promemoria non affidabili in quella configurazione. La prova reale in primo piano/background/blocco resta necessaria anche dopo una build riuscita. Fonti: [LiveContainer](https://github.com/LiveContainer/LiveContainer#fix-file-picker--local-notification), [permessi Apple](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter/requestauthorization(options:completionhandler:)), [richieste in attesa](https://developer.apple.com/documentation/usernotifications/unusernotificationcenter/pendingnotificationrequests()).
+
+Verificare inoltre: fissare/sfissare e riaprire l’app; modificare un pensiero fissato; salvare un impegno senza permesso; programmare un avviso futuro, spostarlo, disattivarlo ed eliminare l’impegno controllando che il vecchio avviso non arrivi; provare anticipi già trascorsi. I test automatici coprono retrocompatibilità v1/v2, backup non sovrascritti, nuovi campi, round trip e calcolo date/ID. La consegna delle notifiche va verificata sul dispositivo.
+
 ## Restyling Fresh Life · 0.3.0
 
 Design system SwiftUI condiviso in `Views/DesignSystem.swift`: palette adattiva chiara/scura (turchese, indaco, corallo), superfici, campi, intestazioni, pulsanti e stati vuoti. Home ridisegnata con header editoriale, saldo a gradiente, riepiloghi mensili, azioni rapide e card agenda/pensieri. Le altre schede mantengono ricerca, selezione mese/giorno e swipe per eliminare con conferma.

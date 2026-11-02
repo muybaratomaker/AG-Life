@@ -24,11 +24,13 @@ struct NotesView: View {
                     message: search.isEmpty ? "Non serve un titolo. Solo un momento per te." : "Prova con un’altra parola.",
                     symbol: "sparkles", area: .thoughts).lifeFloatingRow()
                 }
-                ForEach(notes) { note in
-                    Button { editing = note } label: {
-                        ThoughtRow(note: note)
-                    }.buttonStyle(GentlePressStyle()).lifeFloatingRow()
-                    .swipeActions { Button("Elimina", role: .destructive) { deleting = note } }
+                if notes.contains(where: \.isPinned) {
+                    Section { ForEach(notes.filter(\.isPinned)) { thought($0) } } header: {
+                        Label("Fissati in alto", systemImage: "pin.fill").foregroundStyle(LifeArea.thoughts.accent)
+                    }
+                }
+                if notes.contains(where: { !$0.isPinned }) {
+                    Section("I tuoi pensieri") { ForEach(notes.filter { !$0.isPinned }) { thought($0) } }
                 }
             }
             .lifeList(area: .thoughts)
@@ -48,6 +50,18 @@ struct NotesView: View {
                 }
             }
         }
+    }
+
+    private func thought(_ note: Note) -> some View {
+        Button { editing = note } label: { ThoughtRow(note: note) }
+            .buttonStyle(GentlePressStyle()).lifeFloatingRow()
+            .contextMenu { ThoughtActions(note: note) }
+            .accessibilityAction(named: note.isPinned ? "Rimuovi dai fissati" : "Fissa in alto") {
+                store.update { data in
+                    if let index = data.notes.firstIndex(where: { $0.id == note.id }) { data.notes[index].isPinned.toggle() }
+                }
+            }
+            .swipeActions { Button("Elimina", role: .destructive) { deleting = note } }
     }
 }
 
@@ -109,7 +123,8 @@ struct NoteEditor: View {
 
     private func save() {
         guard !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let item = Note(id: original?.id ?? UUID(), body: bodyText, updatedAt: .now)
+        let pinned = store.data.notes.first(where: { $0.id == original?.id })?.isPinned ?? original?.isPinned ?? false
+        let item = Note(id: original?.id ?? UUID(), body: bodyText, updatedAt: .now, isPinned: pinned)
         if store.update({ data in
             data.notes.removeAll { $0.id == item.id }
             data.notes.append(item)
