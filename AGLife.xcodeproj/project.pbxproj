@@ -108,8 +108,8 @@
                 INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
                 PRODUCT_BUNDLE_IDENTIFIER = "com.aglife.personal";
                 PRODUCT_NAME = "$(TARGET_NAME)";
-                CURRENT_PROJECT_VERSION = 2;
-                MARKETING_VERSION = 0.2.0;
+                CURRENT_PROJECT_VERSION = 3;
+                MARKETING_VERSION = 0.3.0;
                 TARGETED_DEVICE_FAMILY = 1;
                 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
                 SUPPORTS_MACCATALYST = NO;
@@ -129,8 +129,8 @@
                 INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
                 PRODUCT_BUNDLE_IDENTIFIER = "com.aglife.personal";
                 PRODUCT_NAME = "$(TARGET_NAME)";
-                CURRENT_PROJECT_VERSION = 2;
-                MARKETING_VERSION = 0.2.0;
+                CURRENT_PROJECT_VERSION = 3;
+                MARKETING_VERSION = 0.3.0;
                 TARGETED_DEVICE_FAMILY = 1;
                 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
                 SUPPORTS_MACCATALYST = NO;

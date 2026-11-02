@@ -2,6 +2,14 @@
 
 App personale SwiftUI per iPhone, iOS 17+. Nessun account, cloud, SDK esterno o dato personale nel repository.
 
+## Restyling Fresh Life · 0.3.0
+
+Design system SwiftUI condiviso in `Views/DesignSystem.swift`: palette adattiva chiara/scura (turchese, indaco, corallo), superfici, campi, intestazioni, pulsanti e stati vuoti. Home ridisegnata con header editoriale, saldo a gradiente, riepiloghi mensili, azioni rapide e card agenda/pensieri. Le altre schede mantengono ricerca, selezione mese/giorno e swipe per eliminare con conferma.
+
+Gli editor usano superfici personalizzate in ScrollView, etichette permanenti, selettori iOS e pulsante Salva in basso, disponibile anche con tastiera aperta. Nessuna modifica al formato dati o alla persistenza; conservati pensieri senza titolo, migrazione dei titoli precedenti, feedback tattili e Riduci movimento. Bundle identifier e requisiti LiveContainer invariati. Nessun asset remoto o dipendenza aggiunta.
+
+Verificare su iPhone: temi chiaro/scuro, contrasto e VoiceOver, testo ingrandito, inserimento con tastiera, picker data/categoria e conferme di eliminazione. La build macOS verifica compilazione e test del nucleo; non sostituisce il controllo visivo e tattile sul dispositivo.
+
 ## Aggiornamento interfaccia e pensieri
 
 La Home offre due grandi pulsanti affiancati per spese e impegni e un pulsante a tutta larghezza per i pensieri. Con le dimensioni di testo di accessibilità i pulsanti si dispongono verticalmente. Feedback di pressione discreto e animazioni disabilitate con Riduci movimento; feedback tattile di sistema all’inserimento rapido e dopo salvataggi/eliminazioni riusciti, dove supportato dal dispositivo.

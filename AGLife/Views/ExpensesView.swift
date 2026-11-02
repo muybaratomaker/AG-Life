@@ -9,44 +9,48 @@ struct ExpensesView: View {
 
     private var movements: [Movement] {
         store.data.movements.filter { Calendar.current.isDate($0.date, equalTo: month, toGranularity: .month) }
-            .sorted { $0.date > $1.date }
+        .sorted { $0.date > $1.date }
     }
 
     var body: some View {
         NavigationStack {
             List {
+                LifeHeading(title: "Ogni scelta conta.", subtitle: "Una visione chiara del tuo mese.", symbol: "creditcard.fill")
+                .lifeFloatingRow()
                 Section {
                     HStack {
                         Button { moveMonth(-1) } label: { Image(systemName: "chevron.left").padding(8) }
-                            .accessibilityLabel("Mese precedente")
+                        .accessibilityLabel("Mese precedente")
                         Spacer()
                         Text(month, format: .dateTime.month(.wide).year()).font(.headline)
                         Spacer()
                         Button { moveMonth(1) } label: { Image(systemName: "chevron.right").padding(8) }
-                            .accessibilityLabel("Mese successivo")
+                        .accessibilityLabel("Mese successivo")
                     }.buttonStyle(.borderless)
-                    LabeledContent("Uscite", value: Money.display(store.data.total(.expense, in: month)))
-                    LabeledContent("Entrate", value: Money.display(store.data.total(.income, in: month)))
+                    SummaryCard(title: "Uscite del mese", amount: store.data.total(.expense, in: month), symbol: "arrow.up.right")
+                    SummaryCard(title: "Entrate del mese", amount: store.data.total(.income, in: month), symbol: "arrow.down.left")
                 }
                 Section("Movimenti") {
                     if movements.isEmpty {
-                        ContentUnavailableView("Un mese da scrivere", systemImage: "creditcard",
-                            description: Text("Aggiungi la tua prima entrata o uscita."))
+                        LifeEmptyState(title: "Un mese da scrivere", message: "Ogni piccolo movimento racconta la tua giornata.", symbol: "creditcard")
                     }
                     ForEach(movements) { movement in
-                        Button { editing = movement } label: { MovementRow(movement: movement) }.tint(.primary)
-                            .swipeActions {
-                                Button("Elimina", role: .destructive) { deleting = movement }
-                            }
+                        Button { editing = movement } label: {
+                            LifeCard { MovementRow(movement: movement) }
+                        }.buttonStyle(GentlePressStyle()).lifeFloatingRow()
+                        .swipeActions {
+                            Button("Elimina", role: .destructive) { deleting = movement }
+                        }
                     }
                 }
             }
+            .lifeList(area: .spending)
             .navigationTitle("Spese")
             .safeAreaInset(edge: .bottom) { AddBar(title: "Nuovo movimento") { adding = true } }
             .sheet(isPresented: $adding) { MovementEditor() }
             .sheet(item: $editing) { MovementEditor(movement: $0) }
             .confirmationDialog("Eliminare questo movimento?", isPresented: Binding(
-                get: { deleting != nil }, set: { if !$0 { deleting = nil } }
+            get: { deleting != nil }, set: { if !$0 { deleting = nil } }
             ), titleVisibility: .visible) {
                 Button("Elimina", role: .destructive) {
                     if let item = deleting { store.update { $0.movements.removeAll { $0.id == item.id } } }
@@ -72,6 +76,7 @@ struct MovementEditor: View {
     @State private var category: Category
     @State private var detail: String
     @State private var date: Date
+    @FocusState private var amountFocused: Bool
 
     init(movement: Movement? = nil) {
         original = movement
@@ -84,30 +89,53 @@ struct MovementEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Picker("Tipo", selection: $kind) {
-                        ForEach(MovementKind.allCases) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented)
-                    TextField("Importo in euro", text: $amount).keyboardType(.decimalPad)
-                    if !amount.isEmpty && Money.parse(amount) == nil {
-                        Text("Inserisci un importo positivo con massimo due decimali, senza separatori delle migliaia.")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    LifeHeading(title: "Dai valore alle tue scelte.", subtitle: "Un movimento, tutto sotto controllo.", symbol: "creditcard.fill")
+                    LifeField(title: "Movimento", symbol: "arrow.left.arrow.right") {
+                        Picker("Tipo", selection: $kind) {
+                            ForEach(MovementKind.allCases) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.segmented)
+                    }
+                    LifeField(title: "Importo in euro", symbol: "eurosign.circle") {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text("€").font(.title).foregroundStyle(LifeArea.spending.accent).accessibilityHidden(true)
+                            TextField("0,00", text: $amount).keyboardType(.decimalPad).focused($amountFocused)
+                            .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                            .accessibilityLabel("Importo in euro")
+                        }
+                        if !amount.isEmpty && Money.parse(amount) == nil {
+                            Text("Inserisci un importo positivo con massimo due decimali, senza separatori delle migliaia.")
                             .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    Picker("Categoria", selection: $category) {
-                        ForEach(Category.allCases) { Text($0.rawValue).tag($0) }
+                    LifeField(title: "Categoria", symbol: category.symbol) {
+                        Picker("Categoria", selection: $category) {
+                            ForEach(Category.allCases) { Label($0.rawValue, systemImage: $0.symbol).tag($0) }
+                        }.pickerStyle(.menu)
                     }
-                    TextField("Descrizione", text: $detail, axis: .vertical).lineLimit(2...4)
-                    DatePicker("Data", selection: $date, displayedComponents: .date)
+                    LifeField(title: "Descrizione", symbol: "text.alignleft") {
+                        TextField("A cosa si riferisce?", text: $detail, axis: .vertical).lineLimit(2...4)
+                        .accessibilityLabel("Descrizione")
+                    }
+                    LifeField(title: "Quando", symbol: "calendar") {
+                        DatePicker("Data", selection: $date, displayedComponents: .date).datePickerStyle(.compact)
+                    }
                 }
+                .padding(20)
             }
+            .scrollDismissesKeyboard(.interactively).background(LifeBackdrop()).tint(LifeArea.spending.accent)
             .navigationTitle(original == nil ? "Nuovo movimento" : "Modifica movimento")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) { SaveErrorBanner() }
+            .safeAreaInset(edge: .bottom) { LifeSaveBar(area: .spending, enabled: Money.parse(amount) != nil, action: save) }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Annulla") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Salva") { save() }.disabled(Money.parse(amount) == nil)
+                ToolbarItemGroup(placement: .keyboard) {
+                    if amountFocused {
+                        Spacer()
+                        Button("Fine") { amountFocused = false }
+                    }
                 }
             }
         }
@@ -116,7 +144,7 @@ struct MovementEditor: View {
     private func save() {
         guard let value = Money.parse(amount) else { return }
         let item = Movement(id: original?.id ?? UUID(), kind: kind, amount: value, category: category,
-            detail: detail.trimmingCharacters(in: .whitespacesAndNewlines), date: date)
+        detail: detail.trimmingCharacters(in: .whitespacesAndNewlines), date: date)
         if store.update({ data in
             data.movements.removeAll { $0.id == item.id }
             data.movements.append(item)

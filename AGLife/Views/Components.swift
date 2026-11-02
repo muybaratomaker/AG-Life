@@ -32,6 +32,7 @@ struct RootView: View {
             CalendarView().tabItem { Label("Calendario", systemImage: "calendar") }.tag(2)
             NotesView().tabItem { Label("Pensieri", systemImage: "note.text") }.tag(3)
         }
+        .tint(selection == 2 ? LifeArea.calendar.accent : selection == 3 ? LifeArea.thoughts.accent : LifeArea.spending.accent)
         .sensoryFeedback(.success, trigger: store.feedbackRevision)
     }
 }
@@ -62,16 +63,19 @@ struct QuickActionCard: View {
                         icon
                         labels
                         Spacer(minLength: 0)
-                        Image(systemName: "plus").font(.title3.weight(.semibold))
+                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(color)
+                            .accessibilityHidden(true)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 14) { icon; labels }
                 }
             }
             .padding(20)
-            .frame(maxWidth: .infinity, minHeight: wide ? 100 : 148, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: wide ? 108 : 158, alignment: .leading)
             .foregroundStyle(.primary)
-            .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .background(LinearGradient(colors: [color.opacity(0.18), color.opacity(0.06)],
+                startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 26).strokeBorder(color.opacity(0.2), lineWidth: 1) }
             .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
         .buttonStyle(GentlePressStyle())
@@ -85,7 +89,7 @@ struct QuickActionCard: View {
     }
     private var labels: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.headline)
+            Text(title).font(.system(.headline, design: .rounded))
             Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -94,12 +98,16 @@ struct QuickActionCard: View {
 struct ThoughtRow: View {
     let note: Note
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "quote.opening").font(.title3.weight(.bold))
+                .foregroundStyle(LifeArea.thoughts.accent).accessibilityHidden(true)
             Text(note.body).font(.body).foregroundStyle(.primary).lineLimit(3)
             Text(note.updatedAt, format: .dateTime.day().month(.abbreviated).year().hour().minute())
                 .font(.caption).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [LifeArea.thoughts.accent.opacity(0.13), LifePalette.surface],
+            startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 24))
         .accessibilityElement(children: .combine)
     }
 }
@@ -110,22 +118,27 @@ struct SummaryCard: View {
     let symbol: String
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: symbol).font(.subheadline).foregroundStyle(.secondary)
-            Text(Money.display(amount)).font(.title2.bold()).minimumScaleFactor(0.6).lineLimit(1)
+            Label(title, systemImage: symbol).font(.subheadline.weight(.medium)).foregroundStyle(LifeArea.spending.accent)
+            Text(Money.display(amount)).font(.system(.title2, design: .rounded, weight: .bold))
+                .minimumScaleFactor(0.7).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(.background, in: RoundedRectangle(cornerRadius: 24))
+        .background(LifeArea.spending.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))
     }
 }
 
 struct MovementRow: View {
     let movement: Movement
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        HStack(spacing: 14) {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 14))
+        layout {
             Image(systemName: movement.category.symbol)
-                .font(.title3).foregroundStyle(.teal)
-                .frame(width: 44, height: 44).background(.teal.opacity(0.1), in: RoundedRectangle(cornerRadius: 15))
+                .font(.title3).foregroundStyle(LifeArea.spending.accent)
+                .frame(width: 44, height: 44).background(LifeArea.spending.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 15))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(movement.detail.isEmpty ? movement.category.rawValue : movement.detail).lineLimit(2)
                 Text("\(movement.category.rawValue) · \(movement.date.formatted(date: .abbreviated, time: .omitted))")
@@ -134,7 +147,7 @@ struct MovementRow: View {
             Spacer(minLength: 4)
             Text("\(movement.kind == .income ? "+" : "−")\(Money.display(movement.amount))")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(movement.kind == .income ? Color.teal : Color.primary)
+                .foregroundStyle(movement.kind == .income ? LifeArea.spending.accent : Color.primary)
         }.padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
@@ -142,10 +155,15 @@ struct MovementRow: View {
 
 struct AppointmentRow: View {
     let appointment: Appointment
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
-        HStack(spacing: 14) {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
+        layout {
             Text(appointment.date, format: .dateTime.hour().minute())
-                .font(.subheadline.bold()).foregroundStyle(.teal).monospacedDigit()
+                .font(.system(.subheadline, design: .rounded, weight: .bold))
+                .foregroundStyle(LifeArea.calendar.accent).monospacedDigit().padding(10)
+                .background(LifeArea.calendar.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 4) {
                 Text(appointment.title).font(.headline)
                 Text(appointment.date, format: .dateTime.day().month(.abbreviated).year())
@@ -160,12 +178,10 @@ struct AppointmentRow: View {
 
 struct AddBar: View {
     let title: String
+    var area: LifeArea = .spending
     let action: () -> Void
     var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: "plus").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
-        }
-        .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
-        .padding(.horizontal).padding(.vertical, 8).background(.bar)
+        LifePrimaryButton(title: title, symbol: "plus", area: area, action: action)
+            .padding(.horizontal, 20).padding(.vertical, 10).background(.bar)
     }
 }
