@@ -1,1 +1,65 @@
 # AG Life
+
+App personale SwiftUI per iPhone, iOS 17+. Nessun account, cloud, SDK esterno o dato personale nel repository.
+
+## Funzionalità
+
+- **Home:** entrate, uscite e saldo del mese, prossimi tre impegni, ultime tre note e inserimento rapido.
+- **Spese:** creazione, modifica ed eliminazione dei movimenti, selezione mese, categorie, descrizione e data. Importi EUR in `Decimal`, massimo due decimali.
+- **Calendario:** selezione giorno, creazione, modifica ed eliminazione degli impegni. Calendario interno, senza notifiche o sincronizzazione Apple.
+- **Note:** creazione, modifica, ricerca ed eliminazione con conferma, ordinate per ultima modifica.
+- Interfaccia nativa con schede inferiori, colori di sistema, modalità chiara/scura automatica e pulsanti di inserimento in basso.
+
+## Architettura
+
+`AGLife/App` contiene l’avvio; `Models` i modelli Codable e il calcolo dei totali; `Persistence` l’archivio e lo stato osservabile; `Views` le schermate e gli editor. `AGLife.xcodeproj` include lo schema condiviso. Nessun generatore o pacchetto esterno.
+
+Le viste condividono `LifeStore` sul main actor. Ogni modifica viene salvata prima di aggiornare lo stato visibile. Archivio JSON versionato in `Application Support/AGLife/life.json`, con scrittura atomica. Se il caricamento fallisce, il file viene conservato e le modifiche bloccate; se il salvataggio fallisce, lo stato precedente resta valido e l’editor rimane aperto. I/O sincrono adeguato al piccolo archivio iniziale; per grandi volumi servirà spostarlo in background.
+
+I dati restano nel contenitore dell’app, gestito da LiveContainer quando eseguita al suo interno. Non esiste ancora esportazione/backup dall’interfaccia: cancellare app o contenitore può cancellare i dati. Per gli aggiornamenti mantenere lo stesso bundle identifier e contenitore. Il JSON non aggiunge cifratura applicativa.
+
+## Windows e compilazione
+
+Su Windows si modificano sorgenti e configurazione. Xcode e SDK iOS richiedono macOS: compilazione SwiftUI, simulatore e generazione IPA devono essere eseguiti sul runner o su Mac.
+
+Il workflow **Build AG Life IPA** usa `macos-15` e Xcode preinstallato (serve Xcode 16+ per i gruppi sincronizzati). Si avvia manualmente o su modifiche a `main`/pull request. Non richiede Apple ID, certificati o secret e non modifica il repository.
+
+1. Dopo commit e push autorizzati, aprire **Actions → Build AG Life IPA → Run workflow**. Per l’avvio manuale il workflow deve essere nel branch predefinito.
+2. Il runner valida il progetto, esegue i test di `Tests/CoreTests.swift`, compila Release per iPhone arm64 con firma disabilitata e impacchetta `Payload/AGLife.app`.
+3. Scaricare l’artefatto **AGLife-unsigned-IPA**, conservato per 7 giorni, dalla pagina della run.
+4. Estrarre lo ZIP esterno: contiene `AGLife-unsigned.ipa` e il checksum SHA-256. Non rinominare lo ZIP esterno in IPA.
+
+Non si usa `xcodebuild -exportArchive`: il pacchetto è intenzionalmente privo di firma e non si installa direttamente da iOS. Il workflow controlla struttura ZIP e architettura arm64.
+
+GitHub Actions ha quote e condizioni legate all’account, specialmente per repository privati e runner macOS. Non viene attivato un servizio a pagamento: controllare le quote e tenere disabilitata la spesa aggiuntiva nelle impostazioni GitHub.
+
+## LiveContainer e SideStore
+
+Installare/configurare LiveContainer secondo le istruzioni ufficiali, usando SideStore dove previsto. Importare quindi `AGLife-unsigned.ipa` in LiveContainer. SideStore gestisce firma e rinnovo dell’host; LiveContainer gestisce caricamento ed eventuale firma dell’app ospite. In alternativa SideStore può firmare l’IPA per installazione diretta, con i propri limiti.
+
+Non vengono richiesti App Groups, iCloud, push, estensioni o altre capacità con entitlement dedicati. Questo riduce i vincoli, ma la compatibilità effettiva va verificata sulla combinazione iOS/LiveContainer utilizzata. AG Life non richiede JIT per il proprio codice; il metodo di caricamento dell’host dipende dalla sua configurazione JIT/JIT-less. Non aggiungere certificati, credenziali o pairing file al repository.
+
+Riferimenti: [LiveContainer e limitazioni](https://github.com/LiveContainer/LiveContainer), [installazione](https://livecontainer.github.io/docs/installation), [problemi di firma](https://livecontainer.github.io/docs/faq/installing-livecontainer), [download artefatti GitHub](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+
+## Verifiche macOS e iPhone
+
+Test del nucleo su macOS, eseguiti anche nel workflow:
+
+```sh
+mkdir -p build
+xcrun swiftc AGLife/Models/LifeData.swift AGLife/Persistence/LocalArchive.swift Tests/CoreTests.swift -o build/CoreTests
+build/CoreTests
+```
+
+Coprono importi non validi, precisione decimale, totali mensili, salvataggio/lettura di tutti i modelli, modifiche, eliminazione, archivio corrotto, versione sconosciuta e scrittura fallita.
+
+Aprire `AGLife.xcodeproj` con Xcode 16+ per il simulatore. Su iPhone verificare:
+
+- Creare e modificare entrata/uscita, cambiare mese e controllare i totali.
+- Creare un impegno, selezionare il giorno e controllare il riepilogo Home.
+- Creare una nota con accenti e più righe, cercarla, modificarla e confermare l’eliminazione.
+- Chiudere completamente e riaprire app/LiveContainer per verificare la persistenza.
+- Provare tema chiaro/scuro, testo ingrandito, tastiera e VoiceOver.
+- Aggiornare l’IPA nello stesso contenitore e verificare la conservazione dei dati.
+
+La prima compilazione macOS, l’aspetto effettivo e l’importazione in LiveContainer richiedono ancora l’esecuzione del workflow e test su iPhone; i controlli Windows non li sostituiscono.

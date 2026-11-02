@@ -1,0 +1,82 @@
+name: Build AG Life IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['AGLife/**', 'AGLife.xcodeproj/**', 'Tests/**', '.github/workflows/build-ios.yml']
+  pull_request:
+    paths: ['AGLife/**', 'AGLife.xcodeproj/**', 'Tests/**', '.github/workflows/build-ios.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Show toolchain and validate project
+        run: |
+          xcodebuild -version
+          xcrun swift --version
+          plutil -lint AGLife.xcodeproj/project.pbxproj
+          xcodebuild -list -project AGLife.xcodeproj
+      - name: Test models and local archive
+        run: |
+          mkdir -p build
+          xcrun swiftc AGLife/Models/LifeData.swift AGLife/Persistence/LocalArchive.swift Tests/CoreTests.swift -o build/CoreTests
+          build/CoreTests
+      - name: Build unsigned iPhone application
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project AGLife.xcodeproj \
+            -scheme AGLife \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ARCHS=arm64 \
+            | tee build/xcodebuild.log
+      - name: Package and verify IPA for LiveContainer
+        run: |
+          set -euo pipefail
+          APP=build/DerivedData/Build/Products/Release-iphoneos/AGLife.app
+          test -f "$APP/AGLife"
+          plutil -lint "$APP/Info.plist"
+          lipo -verify_arch arm64 "$APP/AGLife"
+          mkdir -p build/package/Payload
+          ditto "$APP" build/package/Payload/AGLife.app
+          cd build/package
+          /usr/bin/zip -q -r -y ../AGLife-unsigned.ipa Payload
+          cd ..
+          unzip -t AGLife-unsigned.ipa
+          shasum -a 256 AGLife-unsigned.ipa > AGLife-unsigned.ipa.sha256
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AGLife-unsigned-IPA
+          path: |
+            build/AGLife-unsigned.ipa
+            build/AGLife-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AGLife-build-log
+          path: build/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
