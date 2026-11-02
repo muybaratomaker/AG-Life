@@ -28,16 +28,15 @@ struct CoreTests {
         let archive = LocalArchive(url: directory.appendingPathComponent("life.json"))
         try check(try archive.load() == LifeData(), "Missing file starts empty")
         let legacyID = UUID()
-        let oldNotes: [[String: Any]] = [
-            ["id": legacyID.uuidString, "title": "  Titolo è 🌿  ", "body": "Corpo\noriginale", "updatedAt": 12345.0],
-            ["id": UUID().uuidString, "title": "Solo titolo", "body": "", "updatedAt": 54321.0],
-            ["id": UUID().uuidString, "title": "", "body": "Solo corpo", "updatedAt": 123.0]
+        let oldNotes = [
+            LegacyNote(id: legacyID, title: "  Titolo è 🌿  ", body: "Corpo\noriginale", updatedAt: Date(timeIntervalSinceReferenceDate: 12345)),
+            LegacyNote(id: UUID(), title: "Solo titolo", body: "", updatedAt: Date(timeIntervalSinceReferenceDate: 54321)),
+            LegacyNote(id: UUID(), title: "", body: "Solo corpo", updatedAt: Date(timeIntervalSinceReferenceDate: 123))
         ]
-        var legacyJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(data)) as! [String: Any]
-        legacyJSON["version"] = 1
-        legacyJSON["notes"] = oldNotes
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let legacyBytes = try JSONSerialization.data(withJSONObject: legacyJSON)
+        // Encode exactly as v1 did, without routing Decimal values through binary doubles.
+        let legacyBytes = try JSONEncoder().encode(LegacyArchive(movements: data.movements,
+            appointments: data.appointments, notes: oldNotes))
         try legacyBytes.write(to: archive.url)
         let migrated = try archive.load()
         try check(migrated.version == 2, "Legacy schema migrates to v2")
@@ -102,6 +101,18 @@ struct CoreTests {
             throw Failure(message: "Write failure must throw")
         } catch let error as Failure { throw error } catch { }
         print("PASS: amounts, totals, archive, legacy migration, agenda, corruption, schema and write failures")
+    }
+    struct LegacyNote: Encodable {
+        let id: UUID
+        let title: String
+        let body: String
+        let updatedAt: Date
+    }
+    struct LegacyArchive: Encodable {
+        let version = 1
+        let movements: [Movement]
+        let appointments: [Appointment]
+        let notes: [LegacyNote]
     }
     struct Failure: Error { let message: String }
     static func check(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
