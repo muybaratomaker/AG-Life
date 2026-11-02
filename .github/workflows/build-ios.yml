@@ -55,7 +55,7 @@ jobs:
           APP=build/DerivedData/Build/Products/Release-iphoneos/AGLife.app
           test -f "$APP/AGLife"
           plutil -lint "$APP/Info.plist"
-          lipo -verify_arch arm64 "$APP/AGLife"
+          lipo "$APP/AGLife" -verify_arch arm64
           mkdir -p build/package/Payload
           ditto "$APP" build/package/Payload/AGLife.app
           cd build/package
