@@ -4,6 +4,7 @@ import SwiftUI
 final class LifeStore: ObservableObject {
     @Published private(set) var data = LifeData()
     @Published private(set) var isReady = false
+    @Published private(set) var feedbackRevision = 0
     @Published var errorMessage: String?
     private var archive: LocalArchive?
 
@@ -31,6 +32,7 @@ final class LifeStore: ObservableObject {
         do {
             try archive.save(next)
             data = next
+            feedbackRevision += 1
             errorMessage = nil
             return true
         } catch {

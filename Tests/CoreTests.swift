@@ -21,12 +21,60 @@ struct CoreTests {
         ]
         try check(data.total(.expense, in: january, calendar: calendar) == Decimal(string: "0.30"), "Exact monthly decimals")
         try check(data.total(.income, in: january, calendar: calendar) == 50, "Income separated")
-        data.notes = [Note(title: "Idea è 🌿", body: "Prima riga\nSeconda riga")]
+        data.notes = [Note(body: "Idea è 🌿\nPrima riga\nSeconda riga")]
         data.appointments = [Appointment(title: "Impegno", date: january, detail: "Dettaglio")]
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let archive = LocalArchive(url: directory.appendingPathComponent("life.json"))
         try check(try archive.load() == LifeData(), "Missing file starts empty")
+        let legacyID = UUID()
+        let oldNotes: [[String: Any]] = [
+            ["id": legacyID.uuidString, "title": "  Titolo è 🌿  ", "body": "Corpo\noriginale", "updatedAt": 12345.0],
+            ["id": UUID().uuidString, "title": "Solo titolo", "body": "", "updatedAt": 54321.0],
+            ["id": UUID().uuidString, "title": "", "body": "Solo corpo", "updatedAt": 123.0]
+        ]
+        var legacyJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(data)) as! [String: Any]
+        legacyJSON["version"] = 1
+        legacyJSON["notes"] = oldNotes
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacyBytes = try JSONSerialization.data(withJSONObject: legacyJSON)
+        try legacyBytes.write(to: archive.url)
+        let migrated = try archive.load()
+        try check(migrated.version == 2, "Legacy schema migrates to v2")
+        try check(migrated.notes[0].id == legacyID, "Legacy identity preserved")
+        try check(migrated.notes[0].updatedAt == Date(timeIntervalSinceReferenceDate: 12345), "Legacy timestamp preserved")
+        try check(migrated.notes[0].body == "  Titolo è 🌿  \n\nCorpo\noriginale", "Title and body preserved verbatim")
+        try check(migrated.notes[1].body == "Solo titolo", "Title-only note preserved")
+        try check(migrated.notes[2].body == "Solo corpo", "Body-only note preserved")
+        try check(migrated.movements == data.movements && migrated.appointments == data.appointments, "Other data unchanged")
+        try check(try Data(contentsOf: archive.url) == legacyBytes, "Migration reads without rewriting original")
+        try archive.save(migrated)
+        try check(try archive.load() == migrated, "Migration is idempotent after save and restart")
+        let encodedNotes = try JSONSerialization.jsonObject(with: JSONEncoder().encode(migrated.notes)) as! [[String: Any]]
+        try check(encodedNotes.allSatisfy { $0["title"] == nil }, "New schema contains body only")
+
+        let now = january.addingTimeInterval(12 * 3600)
+        let earlier = Appointment(title: "Passato oggi", date: now.addingTimeInterval(-3600), detail: "")
+        let later = Appointment(title: "Tra poco", date: now.addingTimeInterval(3600), detail: "")
+        let tomorrow = Appointment(title: "Domani", date: february, detail: "")
+        var agendaData = LifeData()
+        agendaData.appointments = [earlier, tomorrow, later,
+            Appointment(title: "Ieri", date: january.addingTimeInterval(-1), detail: ""),
+            Appointment(title: "Lontano", date: february.addingTimeInterval(7 * 86400), detail: "")]
+        let agenda = agendaData.agenda(at: now, calendar: calendar)
+        try check(agenda.today.map(\.id) == [later.id, earlier.id], "Today includes elapsed, prioritizes next appointments")
+        try check(agenda.upcoming.map(\.id) == [tomorrow.id], "Upcoming excludes today, past and outside seven days")
+        agendaData.appointments += (1...10).map {
+            Appointment(title: "Test", date: now.addingTimeInterval(Double($0 * 60)), detail: "")
+        }
+        let limited = agendaData.agenda(at: now, calendar: calendar)
+        try check(limited.today.count == 3 && limited.todayCount == 12, "Agenda caps visible rows, preserves total")
+        agendaData.appointments += (1...5).map {
+            Appointment(title: "Test domani", date: february.addingTimeInterval(Double($0 * 60)), detail: "")
+        }
+        let busy = agendaData.agenda(at: now, calendar: calendar)
+        try check(busy.upcoming.count == 2 && busy.upcomingCount == 6, "Upcoming preview limited to two")
+        try check(busy.today.map(\.id).allSatisfy { id in !busy.upcoming.contains { $0.id == id } }, "No duplicate events between sections")
         try archive.save(data)
         try check(try archive.load() == data, "Round trip all models, dates, UUIDs, Unicode and decimals")
         data.notes[0].body = "Aggiornata"
@@ -53,7 +101,7 @@ struct CoreTests {
             try LocalArchive(url: blocker.appendingPathComponent("life.json")).save(data)
             throw Failure(message: "Write failure must throw")
         } catch let error as Failure { throw error } catch { }
-        print("PASS: amounts, monthly totals, archive round trips, corruption, schema and write failures")
+        print("PASS: amounts, totals, archive, legacy migration, agenda, corruption, schema and write failures")
     }
     struct Failure: Error { let message: String }
     static func check(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {

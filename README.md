@@ -2,12 +2,22 @@
 
 App personale SwiftUI per iPhone, iOS 17+. Nessun account, cloud, SDK esterno o dato personale nel repository.
 
+## Aggiornamento interfaccia e pensieri
+
+La Home offre due grandi pulsanti affiancati per spese e impegni e un pulsante a tutta larghezza per i pensieri. Con le dimensioni di testo di accessibilità i pulsanti si dispongono verticalmente. Feedback di pressione discreto e animazioni disabilitate con Riduci movimento; feedback tattile di sistema all’inserimento rapido e dopo salvataggi/eliminazioni riusciti, dove supportato dal dispositivo.
+
+I pensieri contengono solo testo, con anteprima e data/ora dell’ultima modifica automatiche. La creazione apre la tastiera nel testo; la modifica non forza la tastiera. I titoli precedenti vengono incorporati integralmente nel corpo, separati da una riga vuota, conservando UUID e data originali. L’archivio v1 viene letto senza riscriverlo e salvato atomicamente come v2 alla prima modifica riuscita. Non usare la vecchia versione dell’app sull’archivio v2.
+
+La Home mostra fino a tre impegni di oggi (prima quelli ancora da iniziare, poi i più recenti già iniziati) e due dei prossimi sette giorni, con accesso al calendario completo. Il riepilogo si aggiorna ogni minuto mentre la Home è visibile.
+
+I test del workflow coprono migrazione, ripetibilità dopo salvataggio/riavvio, titoli senza corpo, Unicode, identità e date, conservazione degli altri dati e limiti del riepilogo impegni. Su iPhone verificare tastiera, VoiceOver, testo ingrandito, Riduci movimento e feedback tattili. Per aggiornare in LiveContainer mantenere lo stesso contenitore dell’app e bundle identifier.
+
 ## Funzionalità
 
-- **Home:** entrate, uscite e saldo del mese, prossimi tre impegni, ultime tre note e inserimento rapido.
+- **Home:** entrate, uscite e saldo del mese, impegni di oggi e imminenti, ultimi tre pensieri e inserimento rapido.
 - **Spese:** creazione, modifica ed eliminazione dei movimenti, selezione mese, categorie, descrizione e data. Importi EUR in `Decimal`, massimo due decimali.
 - **Calendario:** selezione giorno, creazione, modifica ed eliminazione degli impegni. Calendario interno, senza notifiche o sincronizzazione Apple.
-- **Note:** creazione, modifica, ricerca ed eliminazione con conferma, ordinate per ultima modifica.
+- **Pensieri:** creazione, modifica, ricerca ed eliminazione con conferma, ordinati per ultima modifica.
 - Interfaccia nativa con schede inferiori, colori di sistema, modalità chiara/scura automatica e pulsanti di inserimento in basso.
 
 ## Architettura

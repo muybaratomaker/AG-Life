@@ -22,13 +22,85 @@ enum EditorRoute: String, Identifiable {
 }
 
 struct RootView: View {
+    @EnvironmentObject private var store: LifeStore
+    @State private var selection = 0
     var body: some View {
-        TabView {
-            HomeView().tabItem { Label("Home", systemImage: "square.grid.2x2.fill") }
-            ExpensesView().tabItem { Label("Spese", systemImage: "creditcard.fill") }
-            CalendarView().tabItem { Label("Calendario", systemImage: "calendar") }
-            NotesView().tabItem { Label("Note", systemImage: "note.text") }
+        TabView(selection: $selection) {
+            HomeView(onOpenCalendar: { selection = 2 })
+                .tabItem { Label("Home", systemImage: "square.grid.2x2.fill") }.tag(0)
+            ExpensesView().tabItem { Label("Spese", systemImage: "creditcard.fill") }.tag(1)
+            CalendarView().tabItem { Label("Calendario", systemImage: "calendar") }.tag(2)
+            NotesView().tabItem { Label("Pensieri", systemImage: "note.text") }.tag(3)
         }
+        .sensoryFeedback(.success, trigger: store.feedbackRevision)
+    }
+}
+
+struct GentlePressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
+struct QuickActionCard: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let color: Color
+    var wide = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if wide {
+                    HStack(spacing: 16) {
+                        icon
+                        labels
+                        Spacer(minLength: 0)
+                        Image(systemName: "plus").font(.title3.weight(.semibold))
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 14) { icon; labels }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, minHeight: wide ? 100 : 148, alignment: .leading)
+            .foregroundStyle(.primary)
+            .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
+        .buttonStyle(GentlePressStyle())
+        .accessibilityLabel(title + ", " + subtitle)
+    }
+
+    private var icon: some View {
+        Image(systemName: symbol).font(.title2.weight(.semibold)).foregroundStyle(color)
+            .frame(width: 44, height: 44).background(color.opacity(0.12), in: Circle())
+            .accessibilityHidden(true)
+    }
+    private var labels: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.headline)
+            Text(subtitle).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+struct ThoughtRow: View {
+    let note: Note
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(note.body).font(.body).foregroundStyle(.primary).lineLimit(3)
+            Text(note.updatedAt, format: .dateTime.day().month(.abbreviated).year().hour().minute())
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
