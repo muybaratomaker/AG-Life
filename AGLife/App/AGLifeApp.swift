@@ -1,9 +1,11 @@
+import EventKit
 import SwiftUI
 
 @main
 struct AGLifeApp: App {
     @StateObject private var store = LifeStore()
     @StateObject private var notifications = NotificationService()
+    @StateObject private var appleReminders = AppleReminders()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -23,6 +25,7 @@ struct AGLifeApp: App {
             }
             .environmentObject(store)
             .environmentObject(notifications)
+            .environmentObject(appleReminders)
             .tint(.teal)
             .safeAreaInset(edge: .top) {
                 SaveErrorBanner().environmentObject(store).environmentObject(notifications)
@@ -31,7 +34,16 @@ struct AGLifeApp: App {
                 if store.isReady { notifications.synchronize(appointments) }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active, store.isReady { notifications.synchronize(store.data.appointments) }
+                if phase == .active, store.isReady {
+                    notifications.synchronize(store.data.appointments)
+                    appleReminders.synchronize(store)
+                }
+            }
+            .onChange(of: store.isReady, initial: true) { _, ready in
+                if ready { appleReminders.synchronize(store) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged).receive(on: RunLoop.main)) { _ in
+                if scenePhase == .active { appleReminders.synchronize(store) }
             }
         }
     }

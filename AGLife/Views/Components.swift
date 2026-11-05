@@ -97,12 +97,22 @@ struct QuickActionCard: View {
 }
 
 struct ThoughtRow: View {
+    @EnvironmentObject private var appleReminders: AppleReminders
     let note: Note
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: note.isPinned ? "pin.fill" : "quote.opening").font(.title3.weight(.bold))
                 .foregroundStyle(LifeArea.thoughts.accent).accessibilityHidden(true)
             Text(note.body).font(.body).foregroundStyle(.primary).lineLimit(3)
+            if appleReminders.creating.contains(note.id) {
+                Label("Collegamento in corso", systemImage: "checklist").font(.caption)
+            } else if let issue = appleReminders.issues[note.id] {
+                Label(issue, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary)
+            } else if let link = note.appleReminder {
+                Label(link.identifier == nil ? "Collegamento da verificare" : link.isCompleted ? "Completato in Promemoria" : "Collegato a Promemoria Apple",
+                      systemImage: link.isCompleted ? "checkmark.circle.fill" : "checklist")
+                    .font(.caption).foregroundStyle(LifeArea.thoughts.accent)
+            }
             Text(note.updatedAt, format: .dateTime.day().month(.abbreviated).year().hour().minute())
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -117,8 +127,18 @@ struct ThoughtRow: View {
 
 struct ThoughtActions: View {
     @EnvironmentObject private var store: LifeStore
+    @EnvironmentObject private var appleReminders: AppleReminders
     let note: Note
     var body: some View {
+        if let link = note.appleReminder, link.identifier != nil {
+            Button(link.isCompleted ? "Riattiva promemoria" : "Segna come completato") {
+                appleReminders.setCompleted(!link.isCompleted, for: note.id, in: store)
+            }
+        } else if note.appleReminder == nil, appleReminders.issues[note.id] != nil {
+            Button("Riprova collegamento a Promemoria Apple") {
+                Task { await appleReminders.create(for: note.id, in: store) }
+            }
+        }
         Button {
             store.update { data in
                 if let index = data.notes.firstIndex(where: { $0.id == note.id }) {

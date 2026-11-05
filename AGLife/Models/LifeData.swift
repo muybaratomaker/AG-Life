@@ -79,11 +79,18 @@ enum ReminderLead: Int, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct AppleReminderLink: Codable, Equatable {
+    var identifier: String?
+    var syncedTitle: String?
+    var isCompleted = false
+}
+
 struct Note: Identifiable, Codable, Equatable {
     var id = UUID()
     var body: String
     var updatedAt = Date()
     var isPinned = false
+    var appleReminder: AppleReminderLink?
 
     init(id: UUID = UUID(), body: String, updatedAt: Date = .now, isPinned: Bool = false) {
         self.id = id
@@ -92,7 +99,7 @@ struct Note: Identifiable, Codable, Equatable {
         self.isPinned = isPinned
     }
 
-    private enum CodingKeys: String, CodingKey { case id, title, body, updatedAt, isPinned }
+    private enum CodingKeys: String, CodingKey { case id, title, body, updatedAt, isPinned, appleReminder }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -100,6 +107,7 @@ struct Note: Identifiable, Codable, Equatable {
         body = try values.decode(String.self, forKey: .body)
         updatedAt = try values.decode(Date.self, forKey: .updatedAt)
         isPinned = try values.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        appleReminder = try values.decodeIfPresent(AppleReminderLink.self, forKey: .appleReminder)
         // Legacy titles become editable text. Preserve even whitespace and identical titles.
         if let title = try values.decodeIfPresent(String.self, forKey: .title), !title.isEmpty {
             body = title + (body.isEmpty ? "" : "\n\n" + body)
@@ -112,6 +120,7 @@ struct Note: Identifiable, Codable, Equatable {
         try values.encode(body, forKey: .body)
         try values.encode(updatedAt, forKey: .updatedAt)
         try values.encode(isPinned, forKey: .isPinned)
+        try values.encodeIfPresent(appleReminder, forKey: .appleReminder)
     }
 }
 

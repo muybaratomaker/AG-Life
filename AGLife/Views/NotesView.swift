@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NotesView: View {
     @EnvironmentObject private var store: LifeStore
+    @EnvironmentObject private var appleReminders: AppleReminders
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var adding = false
     @State private var editing: Note?
@@ -43,11 +44,21 @@ struct NotesView: View {
             .sheet(item: $editing) { NoteEditor(note: $0) }
             .confirmationDialog("Eliminare questo pensiero?", isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }
-            ), titleVisibility: .visible) {
-                Button("Elimina", role: .destructive) {
-                    if let item = deleting { store.update { $0.notes.removeAll { $0.id == item.id } } }
-                    deleting = nil
+            ), titleVisibility: .visible, presenting: deleting) { item in
+                if item.appleReminder != nil {
+                    Button("Elimina anche da Promemoria Apple", role: .destructive) {
+                        appleReminders.delete(item.id, includingApple: true, in: store)
+                    }
+                    .disabled(item.appleReminder?.identifier == nil)
+                    Button("Elimina il pensiero e conserva il promemoria", role: .destructive) {
+                        appleReminders.delete(item.id, includingApple: false, in: store)
+                    }
+                } else {
+                    Button("Elimina", role: .destructive) {
+                        appleReminders.delete(item.id, includingApple: false, in: store)
+                    }
                 }
+                Button("Annulla", role: .cancel) {}
             }
         }
     }
@@ -61,20 +72,27 @@ struct NotesView: View {
                     if let index = data.notes.firstIndex(where: { $0.id == note.id }) { data.notes[index].isPinned.toggle() }
                 }
             }
-            .swipeActions { Button("Elimina", role: .destructive) { deleting = note } }
+            .swipeActions(allowsFullSwipe: false) {
+                Button("Elimina", role: .destructive) { deleting = note }
+                    .disabled(appleReminders.creating.contains(note.id))
+            }
     }
 }
 
 struct NoteEditor: View {
     @EnvironmentObject private var store: LifeStore
+    @EnvironmentObject private var appleReminders: AppleReminders
     @Environment(\.dismiss) private var dismiss
     private let original: Note?
     @State private var bodyText: String
+    @State private var addToApple = false
+    @State private var keepAppleLink: Bool
     @FocusState private var textFocused: Bool
 
     init(note: Note? = nil) {
         original = note
         _bodyText = State(initialValue: note?.body ?? "")
+        _keepAppleLink = State(initialValue: note?.appleReminder != nil)
     }
 
     var body: some View {
@@ -98,6 +116,17 @@ struct NoteEditor: View {
                     if let original {
                         Text("Ultima modifica: \(original.updatedAt.formatted(date: .abbreviated, time: .shortened))")
                         .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if original == nil {
+                        LifeField(title: "Promemoria Apple", symbol: "checklist", area: .thoughts) {
+                            Toggle("Aggiungi a Promemoria Apple", isOn: $addToApple)
+                        }
+                    } else if original?.appleReminder != nil {
+                        LifeField(title: "Promemoria Apple", symbol: "checklist", area: .thoughts) {
+                            Toggle("Mantieni il collegamento", isOn: $keepAppleLink)
+                            Text("Disattivando il collegamento, il promemoria resta nell’app Apple.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .padding(20)
@@ -123,11 +152,26 @@ struct NoteEditor: View {
 
     private func save() {
         guard !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let pinned = store.data.notes.first(where: { $0.id == original?.id })?.isPinned ?? original?.isPinned ?? false
-        let item = Note(id: original?.id ?? UUID(), body: bodyText, updatedAt: .now, isPinned: pinned)
+        let current = store.data.notes.first(where: { $0.id == original?.id })
+        if let original, current?.body != original.body {
+            store.errorMessage = "Il pensiero è cambiato mentre era aperto. Riaprilo per modificare il testo più recente."
+            return
+        }
+        var item = Note(id: original?.id ?? UUID(), body: bodyText, updatedAt: .now, isPinned: current?.isPinned ?? false)
+        item.appleReminder = keepAppleLink ? current?.appleReminder : nil
         if store.update({ data in
             data.notes.removeAll { $0.id == item.id }
             data.notes.append(item)
-        }) { dismiss() }
+        }) {
+            if addToApple {
+                let id = item.id
+                Task { await appleReminders.create(for: id, in: store) }
+            } else if !keepAppleLink, current?.appleReminder != nil {
+                appleReminders.clearIssue(for: item.id)
+            } else if item.appleReminder != nil {
+                appleReminders.synchronize(store)
+            }
+            dismiss()
+        }
     }
 }

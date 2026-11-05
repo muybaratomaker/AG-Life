@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
     <key>NSRemindersFullAccessUsageDescription</key>
-    <string>AG Life chiede accesso a Promemoria per creare e rileggere il promemoria di prova Test AG Life.</string>
+    <string>AG Life chiede accesso per creare e aggiornare i pensieri che scegli di collegare a Promemoria Apple.</string>
 </dict>
 </plist>

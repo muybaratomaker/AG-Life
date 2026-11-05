@@ -65,10 +65,14 @@ struct CoreTests {
         try check(migratedV2.version == 3 && migratedV2.notes[0].body == oldBodyNote.body, "v2 body preserved")
         try check(migratedV2.notes[0].id == oldBodyNote.id && migratedV2.notes[0].updatedAt == january, "v2 identity and date preserved")
         try check(!migratedV2.notes[0].isPinned && migratedV2.appointments[0].reminder == nil, "Missing v2 properties default safely")
+        try check(migratedV2.notes[0].appleReminder == nil, "Old thoughts remain unlinked")
+        let appleLink = AppleReminderLink(identifier: "eventkit-test-id", syncedTitle: oldBodyNote.body, isCompleted: true)
+        migratedV2.notes[0].appleReminder = appleLink
         migratedV2.notes[0].isPinned = true
         migratedV2.appointments[0].reminder = .fifteenMinutes
         try v2Archive.save(migratedV2)
         try check(try v2Archive.load() == migratedV2, "Pin and reminder persist after restart")
+        try check(try v2Archive.load().notes[0].appleReminder == appleLink, "Apple identifier, synced title and completion survive restart")
         try check(try Data(contentsOf: v2Archive.url.appendingPathExtension("pre-v3-backup")) == v2Bytes, "v2 backup preserved")
         migratedV2.notes[0].isPinned = false
         migratedV2.appointments[0].reminder = nil
