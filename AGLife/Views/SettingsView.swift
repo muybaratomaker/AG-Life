@@ -42,6 +42,7 @@ struct SettingsView: View {
                             Link("Guida ufficiale LiveContainer", destination: URL(string: "https://github.com/LiveContainer/LiveContainer#fix-file-picker--local-notification")!)
                         }
                     }
+                    AppleRemindersTestView()
                 }.padding(20)
             }
             .background(LifeBackdrop(area: .calendar)).tint(LifeArea.calendar.accent)

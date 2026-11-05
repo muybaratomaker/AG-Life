@@ -55,6 +55,7 @@ jobs:
           APP=build/DerivedData/Build/Products/Release-iphoneos/AGLife.app
           test -f "$APP/AGLife"
           plutil -lint "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSRemindersFullAccessUsageDescription' "$APP/Info.plist"
           lipo "$APP/AGLife" -verify_arch arm64
           mkdir -p build/package/Payload
           ditto "$APP" build/package/Payload/AGLife.app
