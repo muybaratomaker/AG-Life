@@ -120,6 +120,20 @@ struct CoreTests {
         try check(busy.today.map(\.id).allSatisfy { id in !busy.upcoming.contains { $0.id == id } }, "No duplicate events between sections")
         try archive.save(data)
         try check(try archive.load() == data, "Round trip all models, dates, UUIDs, Unicode and decimals")
+        let savedBody = data.notes[0].body
+        let savedID = data.notes[0].id
+        data.notes[0].appleReminder = AppleReminderLink()
+        try archive.save(data)
+        var interrupted = try archive.load()
+        try check(interrupted.notes[0].body == savedBody && interrupted.notes[0].id == savedID,
+            "Interrupted Apple attempt preserves local thought after restart")
+        try check(interrupted.notes[0].appleReminder?.identifier == nil,
+            "Interrupted attempt is not a confirmed Apple identifier")
+        interrupted.notes[0].appleReminder = AppleReminderLink(identifier: "recovered-id", syncedTitle: savedBody)
+        try archive.save(interrupted)
+        let recovered = try archive.load()
+        try check(recovered.notes.count == data.notes.count && recovered.notes[0].id == savedID,
+            "Recovered link does not duplicate local thoughts")
         data.notes[0].body = "Aggiornata"
         data.movements.removeFirst()
         try archive.save(data)

@@ -4,12 +4,21 @@ struct SettingsView: View {
     @EnvironmentObject private var store: LifeStore
     @EnvironmentObject private var notifications: NotificationService
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(SaveTrace.key) private var lastSavePhase = "Nessun salvataggio osservato"
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     AppleListRecoveryView()
+                    LifeCard(area: .thoughts) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Diagnostica temporanea salvataggio").font(.headline)
+                            Text(lastSavePhase).font(.footnote)
+                            Text("Ultima fase registrata sul dispositivo. Il messaggio non contiene il testo dei pensieri.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     LifeHeading(title: "Un promemoria, al momento giusto.", subtitle: "Verifica le notifiche sul tuo iPhone.", area: .calendar, symbol: "bell.badge")
                     LifeCard(area: .calendar) {
                         VStack(alignment: .leading, spacing: 14) {

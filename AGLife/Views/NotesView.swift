@@ -86,6 +86,7 @@ struct NoteEditor: View {
     private let original: Note?
     @State private var bodyText: String
     @State private var addToApple = false
+    @State private var isSaving = false
     @State private var keepAppleLink: Bool
     @FocusState private var textFocused: Bool
 
@@ -136,7 +137,7 @@ struct NoteEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) { SaveErrorBanner() }
             .safeAreaInset(edge: .bottom) {
-                LifeSaveBar(area: .thoughts, enabled: !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: save)
+                LifeSaveBar(area: .thoughts, enabled: !isSaving && !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: save)
             }
             .task {
                 guard original == nil else { return }
@@ -151,10 +152,13 @@ struct NoteEditor: View {
     }
 
     private func save() {
-        guard !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !isSaving, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isSaving = true
+        SaveTrace.record("1 · Inizio salvataggio locale")
         let current = store.data.notes.first(where: { $0.id == original?.id })
         if let original, current?.body != original.body {
             store.errorMessage = "Il pensiero è cambiato mentre era aperto. Riaprilo per modificare il testo più recente."
+            isSaving = false
             return
         }
         var item = Note(id: original?.id ?? UUID(), body: bodyText, updatedAt: .now, isPinned: current?.isPinned ?? false)
@@ -163,15 +167,29 @@ struct NoteEditor: View {
             data.notes.removeAll { $0.id == item.id }
             data.notes.append(item)
         }) {
-            if addToApple {
-                let id = item.id
-                Task { await appleReminders.create(for: id, in: store) }
-            } else if !keepAppleLink, current?.appleReminder != nil {
-                appleReminders.clearIssue(for: item.id)
-            } else if item.appleReminder != nil {
-                appleReminders.synchronize(store)
-            }
+            SaveTrace.record("2 · Pensiero salvato localmente")
+            let service = appleReminders
+            let localStore = store
+            let id = item.id
+            let shouldCreate = addToApple
+            let shouldSync = item.appleReminder != nil
+            let shouldClear = !keepAppleLink && current?.appleReminder != nil
+            textFocused = false
             dismiss()
+            // Run Apple work after committing local data and leaving the editor's save callback.
+            Task { @MainActor in
+                await Task.yield()
+                if shouldCreate {
+                    await service.create(for: id, in: localStore)
+                } else if shouldClear {
+                    service.clearIssue(for: id)
+                } else if shouldSync {
+                    service.synchronize(localStore)
+                }
+            }
+        } else {
+            SaveTrace.record("Errore · Salvataggio locale non riuscito")
+            isSaving = false
         }
     }
 }
