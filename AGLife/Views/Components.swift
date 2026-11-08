@@ -115,6 +115,9 @@ struct ThoughtRow: View {
             }
             Text(note.updatedAt, format: .dateTime.day().month(.abbreviated).year().hour().minute())
                 .font(.caption).foregroundStyle(.secondary)
+            if let diagnostic = appleReminders.diagnostics[note.id] {
+                Text(diagnostic).font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(20).frame(maxWidth: .infinity, alignment: .leading)
         .background(LinearGradient(colors: [LifeArea.thoughts.accent.opacity(0.13), LifePalette.surface],
@@ -130,6 +133,11 @@ struct ThoughtActions: View {
     @EnvironmentObject private var appleReminders: AppleReminders
     let note: Note
     var body: some View {
+        if note.appleReminder != nil {
+            Button("Verifica e recupera collegamento") {
+                Task { await appleReminders.recover(note.id, in: store) }
+            }.disabled(appleReminders.creating.contains(note.id))
+        }
         if let link = note.appleReminder, link.identifier != nil {
             Button(link.isCompleted ? "Riattiva promemoria" : "Segna come completato") {
                 appleReminders.setCompleted(!link.isCompleted, for: note.id, in: store)
