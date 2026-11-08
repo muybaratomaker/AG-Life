@@ -9,6 +9,7 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    AppleListRecoveryView()
                     LifeHeading(title: "Un promemoria, al momento giusto.", subtitle: "Verifica le notifiche sul tuo iPhone.", area: .calendar, symbol: "bell.badge")
                     LifeCard(area: .calendar) {
                         VStack(alignment: .leading, spacing: 14) {

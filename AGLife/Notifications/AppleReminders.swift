@@ -6,6 +6,13 @@ final class AppleReminders: ObservableObject {
     @Published private(set) var issues: [UUID: String] = [:]
     @Published private(set) var creating = Set<UUID>()
     @Published private(set) var diagnostics: [UUID: String] = [:]
+    @Published private(set) var listChoices: [ListChoice] = []
+    @Published private(set) var listReport = "Cerca le liste accessibili a EventKit."
+    @Published private(set) var canCreateList = false
+    struct ListChoice: Identifiable {
+        let id: String
+        let account: String
+    }
     private let listKey = "AppleReminders.managedList"
     private lazy var eventStore = EKEventStore()
 
@@ -230,25 +237,103 @@ final class AppleReminders: ObservableObject {
     private func managedList(in events: EKEventStore) throws -> EKCalendar {
         if let identifier = UserDefaults.standard.string(forKey: listKey) {
             guard let list = events.calendar(withIdentifier: identifier) else {
-                throw Problem(message: "Lista AG Life collegata non trovata. Prova il recupero su un pensiero già collegato.")
+                throw Problem(message: "Lista AG Life collegata non trovata. Apri Impostazioni → Lista Promemoria Apple → Cerca liste.")
             }
             guard list.allowedEntityTypes.contains(.reminder), list.allowsContentModifications else {
                 throw Problem(message: "La lista AG Life collegata non consente modifiche ai promemoria.")
             }
             return list
         }
-        guard !events.calendars(for: .reminder).contains(where: { $0.title == "AG Life" }) else {
-            throw Problem(message: "Esiste una lista AG Life, ma manca il suo collegamento. Recupera un pensiero già collegato per identificarla senza creare duplicati.")
+        throw Problem(message: "Scegli la lista in Impostazioni → Lista Promemoria Apple → Cerca liste.")
+    }
+
+    func scanLists() {
+        listChoices = []
+        canCreateList = false
+        do {
+            try requireAccess()
+            let events = EKEventStore()
+            let lists = events.calendars(for: .reminder)
+            let named = lists.filter { $0.title == "AG Life" }
+            listChoices = named.filter { $0.allowsContentModifications }.map { list in
+                ListChoice(id: list.calendarIdentifier, account: accountLabel(list.source, in: events))
+            }
+            canCreateList = listChoices.isEmpty
+            let stored = UserDefaults.standard.string(forKey: listKey)
+            let linked = lists.first { $0.calendarIdentifier == stored }
+            let status = linked.map { $0.allowsContentModifications ? "Collegamento attuale accessibile." : "Collegamento attuale in sola lettura." }
+                ?? "Identificativo salvato assente o non più visibile."
+            let groups = Dictionary(grouping: lists, by: { $0.source.sourceIdentifier })
+            let summary = events.sources.enumerated().map { index, source in
+                let accountLists = groups[source.sourceIdentifier] ?? []
+                let matches = accountLists.filter { $0.title == "AG Life" }
+                return "Account \(index + 1) · \(sourceTypeLabel(source)): \(accountLists.count) liste, \(matches.count) chiamate AG Life, \(matches.filter { $0.allowsContentModifications }.count) modificabili."
+            }.joined(separator: "\n")
+            listReport = "Accesso completo confermato. \(status)\nEventKit restituisce \(lists.count) liste e \(listChoices.count) liste AG Life compatibili.\n\(summary)"
+            if lists.isEmpty {
+                listReport += "\nSe Apple mostra già la lista, verifica account e permesso Promemoria di LiveContainer in iOS, quindi ripeti la ricerca."
+            }
+        } catch { listReport = error.localizedDescription }
+    }
+
+    func selectList(_ identifier: String) {
+        do {
+            let events = EKEventStore()
+            try requireAccess()
+            guard let list = events.calendars(for: .reminder).first(where: { $0.calendarIdentifier == identifier }),
+                  list.title == "AG Life", list.allowsContentModifications else {
+                throw Problem(message: "La lista scelta non è più accessibile o modificabile. Ripeti Cerca liste.")
+            }
+            UserDefaults.standard.set(identifier, forKey: listKey)
+            listReport = "Lista AG Life ricollegata · \(accountLabel(list.source, in: events)). Puoi riprovare l’invio del pensiero."
+            canCreateList = false
+        } catch { listReport = error.localizedDescription }
+    }
+
+    func createListExplicitly() {
+        do {
+            try requireAccess()
+            let events = EKEventStore()
+            guard !events.calendars(for: .reminder).contains(where: { $0.title == "AG Life" && $0.allowsContentModifications }) else {
+                scanLists()
+                return
+            }
+            guard let source = events.defaultCalendarForNewReminders()?.source else {
+                throw Problem(message: "Account predefinito Promemoria non disponibile. Configuralo nell’app Apple e ripeti la ricerca.")
+            }
+            let list = EKCalendar(for: .reminder, eventStore: events)
+            list.title = "AG Life"
+            list.source = source
+            canCreateList = false
+            try events.saveCalendar(list, commit: true)
+            // Keep the ID even if the independent verification fails, avoiding a blind retry.
+            UserDefaults.standard.set(list.calendarIdentifier, forKey: listKey)
+            canCreateList = false
+            let reader = EKEventStore()
+            guard reader.calendar(withIdentifier: list.calendarIdentifier) != nil else {
+                throw Problem(message: "Creazione accettata, ma lista non ancora rileggibile. Ripeti Cerca liste prima di creare ancora.")
+            }
+            scanLists()
+            listReport = "Lista creata e collegata.\n" + listReport
+        } catch { listReport = error.localizedDescription }
+    }
+
+    private func accountLabel(_ source: EKSource, in events: EKEventStore) -> String {
+        let number = (events.sources.firstIndex(where: { $0.sourceIdentifier == source.sourceIdentifier }) ?? 0) + 1
+        let title = source.title.contains("@") ? "Account \(number)" : source.title
+        return "\(title) · account \(number), \(sourceTypeLabel(source))"
+    }
+
+    private func sourceTypeLabel(_ source: EKSource) -> String {
+        switch source.sourceType {
+        case .local: return "Sul dispositivo"
+        case .exchange: return "Exchange"
+        case .calDAV: return "CalDAV / iCloud"
+        case .mobileMe: return "iCloud"
+        case .subscribed: return "Abbonamento"
+        case .birthdays: return "Compleanni"
+        @unknown default: return "Altra origine"
         }
-        guard let source = events.defaultCalendarForNewReminders()?.source else {
-            throw Problem(message: "Apple non offre un account predefinito per creare l’elenco AG Life.")
-        }
-        let list = EKCalendar(for: .reminder, eventStore: events)
-        list.title = "AG Life"
-        list.source = source
-        try events.saveCalendar(list, commit: true)
-        UserDefaults.standard.set(list.calendarIdentifier, forKey: listKey)
-        return list
     }
 
     private struct Problem: LocalizedError {
