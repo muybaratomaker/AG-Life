@@ -105,19 +105,18 @@ struct ThoughtRow: View {
                 .foregroundStyle(LifeArea.thoughts.accent).accessibilityHidden(true)
             Text(note.body).font(.body).foregroundStyle(.primary).lineLimit(3)
             if appleReminders.creating.contains(note.id) {
-                Label("Collegamento in corso", systemImage: "checklist").font(.caption)
-            } else if let issue = appleReminders.issues[note.id] {
-                Label(issue, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.secondary)
+                Image(systemName: "arrow.triangle.2.circlepath").font(.caption)
+                    .accessibilityLabel("Collegamento in corso")
+            } else if appleReminders.issues[note.id] != nil {
+                Label("Collegamento da verificare", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.secondary)
             } else if let link = note.appleReminder {
-                Label(link.identifier == nil ? "Collegamento da verificare" : link.isCompleted ? "Completato in Promemoria" : "Collegato a Promemoria Apple",
-                      systemImage: link.isCompleted ? "checkmark.circle.fill" : "checklist")
+                Image(systemName: link.identifier == nil ? "exclamationmark.circle" : link.isCompleted ? "checkmark.circle.fill" : "checklist")
                     .font(.caption).foregroundStyle(LifeArea.thoughts.accent)
+                    .accessibilityLabel(link.identifier == nil ? "Collegamento da verificare" : link.isCompleted ? "Completato in Promemoria" : "Collegato a Promemoria Apple")
             }
             Text(note.updatedAt, format: .dateTime.day().month(.abbreviated).year().hour().minute())
                 .font(.caption).foregroundStyle(.secondary)
-            if let diagnostic = appleReminders.diagnostics[note.id] {
-                Text(diagnostic).font(.caption).foregroundStyle(.secondary)
-            }
         }
         .padding(20).frame(maxWidth: .infinity, alignment: .leading)
         .background(LinearGradient(colors: [LifeArea.thoughts.accent.opacity(0.13), LifePalette.surface],

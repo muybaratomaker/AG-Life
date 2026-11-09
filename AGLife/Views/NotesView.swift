@@ -180,11 +180,12 @@ struct NoteEditor: View {
             Task { @MainActor in
                 await Task.yield()
                 if shouldCreate {
-                    await service.create(for: id, in: localStore)
+                    await service.create(for: id, in: localStore, openAfterSave: true)
                 } else if shouldClear {
                     service.clearIssue(for: id)
                 } else if shouldSync {
                     service.synchronize(localStore)
+                    await service.openAfterVerifiedSave(id, in: localStore)
                 }
             }
         } else {

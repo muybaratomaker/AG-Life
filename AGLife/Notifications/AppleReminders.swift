@@ -1,5 +1,6 @@
 import EventKit
 import SwiftUI
+import UIKit
 
 @MainActor
 final class AppleReminders: ObservableObject {
@@ -14,10 +15,11 @@ final class AppleReminders: ObservableObject {
         let account: String
     }
     private let listKey = "AppleReminders.managedList"
+    static let openAfterSaveKey = "AppleReminders.openAfterSave"
     private lazy var eventStore = EKEventStore()
     private var isSynchronizing = false
 
-    func create(for id: UUID, in store: LifeStore) async {
+    func create(for id: UUID, in store: LifeStore, openAfterSave: Bool = false) async {
         guard creating.insert(id).inserted else { return }
         defer { creating.remove(id) }
         do {
@@ -49,11 +51,12 @@ final class AppleReminders: ObservableObject {
                 diagnostics[id] = verified
                 issues[id] = nil
                 SaveTrace.record("7 · Salvataggio Apple verificato")
+                if openAfterSave { await openAfterVerifiedSave(id, in: store) }
             }
         } catch {
             SaveTrace.record("Errore · Sincronizzazione Apple non riuscita, pensiero locale conservato")
             issues[id] = error.localizedDescription
-            store.errorMessage = "Pensiero salvato in AG Life. Promemoria Apple: \(error.localizedDescription)"
+            store.errorMessage = "Pensiero salvato. Collegamento a Promemoria Apple non riuscito. Controlla le Impostazioni."
         }
     }
 
@@ -68,6 +71,7 @@ final class AppleReminders: ObservableObject {
             defer { withExtendedLifetime(events) {} }
         var changes: [UUID: AppleReminderLink] = [:]
         for note in notes {
+            diagnostics[note.id] = nil
             do {
                 guard var link = note.appleReminder else { continue }
                 let reminder = try linkedReminder(note, in: events)
@@ -137,6 +141,23 @@ final class AppleReminders: ObservableObject {
     func clearIssue(for id: UUID) {
         issues[id] = nil
         diagnostics[id] = nil
+    }
+
+    func openAfterVerifiedSave(_ id: UUID, in store: LifeStore) async {
+        guard UserDefaults.standard.bool(forKey: Self.openAfterSaveKey),
+              let note = store.data.notes.first(where: { $0.id == id }),
+              let link = note.appleReminder, link.identifier != nil,
+              link.syncedTitle == note.body, issues[id] == nil, diagnostics[id] != nil else { return }
+        guard UIApplication.shared.applicationState == .active else {
+            store.errorMessage = "Pensiero salvato. Apertura di Promemoria saltata perché AG Life non è in primo piano."
+            return
+        }
+        // Experimental Apple scheme. Use open's result directly, avoiding unreliable guest URL queries.
+        guard let url = URL(string: "x-apple-reminderkit://") else { return }
+        let opened = await UIApplication.shared.open(url, options: [:])
+        if !opened {
+            store.errorMessage = "Pensiero salvato e sincronizzato. Apertura di Promemoria non supportata da questa configurazione."
+        }
     }
 
     // Read-only search by the marker we wrote, never by the user's text.

@@ -3,14 +3,36 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: LifeStore
     @EnvironmentObject private var notifications: NotificationService
+    @EnvironmentObject private var appleReminders: AppleReminders
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SaveTrace.key) private var lastSavePhase = "Nessun salvataggio osservato"
+    @AppStorage(AppleReminders.openAfterSaveKey) private var openRemindersAfterSave = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    LifeCard(area: .thoughts) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("Apri Promemoria dopo il salvataggio", isOn: $openRemindersAfterSave)
+                            Text("Sperimentale. Dopo un salvataggio Apple verificato, prova ad aprire Promemoria. Il supporto dipende da iOS e LiveContainer e non garantisce l’aggiornamento del widget.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
                     AppleListRecoveryView()
+                    DisclosureGroup("Diagnostica Promemoria Apple") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            ForEach(store.data.notes.filter {
+                                $0.appleReminder != nil || appleReminders.issues[$0.id] != nil
+                            }) { note in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(note.updatedAt, format: .dateTime.day().month().hour().minute())
+                                    if let issue = appleReminders.issues[note.id] { Text(issue) }
+                                    if let diagnostic = appleReminders.diagnostics[note.id] { Text(diagnostic) }
+                                }.font(.footnote)
+                            }
+                        }.padding(.top, 12)
+                    }
                     LifeCard(area: .thoughts) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Diagnostica temporanea salvataggio").font(.headline)
